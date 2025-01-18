@@ -3,7 +3,7 @@ dataset=$4
 scFM_type=$6
 
 project_dir='.'
-output_dir=${project_dir}/out/${gnn_type}/${scFM_type}/${dataset}/
+output_dir=${project_dir}/out/${gnn_type}/${scFM_type}/${dataset}
 ckpt_dir=${output_dir}/ckpt
 
 mkdir -p ${output_dir}

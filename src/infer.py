@@ -1,32 +1,68 @@
+import torch
 import numpy as np
 import pandas as pd
-import os
-import gc
-import logging
-import torch
-from torch.nn import functional as F
+from tqdm import tqdm
+from models import scTransNet_GCN, scTransNet_SAGE, scTransNet_GAT
+from utils import scRNADataset, load_data, adj2saprse_tensor
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from tqdm import tqdm
-from src.models import scTransNet_GCN, scTransNet_SAGE, scTransNet_GAT
-from src.utils import scRNADataset, load_data, adj2saprse_tensor, Evaluation
-from src.utils import set_logging, set_seed
-from src.args import parse_args, save_args
+from sklearn.metrics import roc_auc_score, average_precision_score, accuracy_score
+from sklearn.metrics import precision_score, recall_score, f1_score
+from torch.nn import functional as F
+import logging
+import gc
+import os
+from args import parse_args, save_args
+from utils import set_logging, store_results, set_seed
 import warnings
-
-from optuna.exceptions import ExperimentalWarning
+warnings.filterwarnings("ignore", category=UserWarning)
 
 logger = logging.getLogger(__name__)
 
-warnings.filterwarnings("ignore", category=ExperimentalWarning, module="optuna.multi_objective")
-warnings.filterwarnings("ignore", category=FutureWarning)
+
+def Evaluation(y_true, y_pred, flag=False):
+    if flag:
+        y_p = y_pred[:, -1]
+        y_p = y_p.cpu().detach().numpy()
+        y_p = y_p.flatten()
+    else:
+        y_p = y_pred.cpu().detach().numpy()
+        y_p = y_p.flatten()
+
+    y_t = y_true.cpu().numpy().flatten().astype(int)
+
+    AUC = roc_auc_score(y_true=y_t, y_score=y_p)
+    AUPR = average_precision_score(y_true=y_t, y_score=y_p)
+    AUPR_norm = AUPR / np.mean(y_t)
+
+    y_p_binary = (y_p >= 0.5).astype(int)
+
+    accuracy = accuracy_score(y_true=y_t, y_pred=y_p_binary)
+    precision = precision_score(y_true=y_t, y_pred=y_p_binary, average='binary')  
+    recall = recall_score(y_true=y_t, y_pred=y_p_binary, average='binary') 
+    f1 = f1_score(y_true=y_t, y_pred=y_p_binary, average='binary')
+
+    micro_f1 = f1_score(y_true=y_t, y_pred=y_p_binary, average='micro')
+    macro_f1 = f1_score(y_true=y_t, y_pred=y_p_binary, average='macro')
+
+    return {
+        'AUC': AUC,
+        'AUPR': AUPR,
+        'AUPR_norm': AUPR_norm,
+        'Accuracy': accuracy,
+        'Precision': precision,
+        'Recall': recall,
+        'F1': f1,
+        'Micro_F1': micro_f1,
+        'Macro_F1': macro_f1
+    }
 
 
-class Trainer: 
+class Infer: 
     def __init__(self, args, **kwargs):
         self.args = args
         self.trial = kwargs.pop("trial", None)
-
+    
     @property
     def device(self):
         return torch.device(self.args.single_gpu if torch.cuda.is_available() else "cpu")
@@ -83,8 +119,8 @@ class Trainer:
         
         feature1 = torch.from_numpy(gene_embeddings).float()
         return feature1
-    
         
+   
     def _prepare_data(self):
         path = os.path.join(self.args.data_folder, f'{self.args.cell_type}/TFs+{self.args.num_TF}/')
         exp_file = os.path.join(path, 'BL--ExpressionData.csv')
@@ -124,10 +160,10 @@ class Trainer:
         test_data = torch.from_numpy(test_data)
         test_data = test_data.to(self.device)
 
-        return train_load, test_data, adj, data_feature1, data_feature2
-
-
+        return train_load, train_data, test_data, adj, data_feature1, data_feature2
+    
     def get_model(self):
+
         if self.args.gnn_type == "GCN":
             model = scTransNet_GCN(input_dim=self.input_dim,
                                    args=self.args,
@@ -147,92 +183,79 @@ class Trainer:
                                    device=self.device
                                    ).to(self.device)
         return model
-
-
-    def train(self):
-        max_AUC = 0
-        accumulate_patience = 0
-        train_load, test_data, adj, data_feature1, data_feature2 = self._prepare_data()
-        self.model = self.get_model()
-        optimizer = getattr(optim, self.args.optimizer_name)(self.model.parameters(), lr=self.args.gnn_lr, weight_decay=self.args.gnn_weight_decay)
-
-        for epoch in tqdm(range(self.args.gnn_epochs)):
-            running_loss = 0.0
-            for train_x, train_y in DataLoader(train_load, batch_size=self.args.batch_size, shuffle=True):
-                self.model.train()
-                optimizer.zero_grad()
-
-                if self.args.flag:
-                    train_y = train_y.to(self.device)
-                else:
-                    train_y = train_y.to(self.device).view(-1, 1)
-
-                pred = self.model(data_feature2, adj, train_x, data_feature1)
-
-                if self.args.flag:
-                    pred = torch.softmax(pred, dim=1)
-                else:
-                    pred = torch.sigmoid(pred)
-
-                loss_BCE = F.binary_cross_entropy(pred, train_y)
-                loss_BCE.backward()
-                optimizer.step()
-
-                running_loss += loss_BCE.item()
-            
-            if (epoch+1) % self.args.gnn_eval_interval == 0:
-                self.model.eval()
-                score = self.model(data_feature2, adj, test_data, data_feature1)
-
-                if self.args.flag:
-                    score = torch.softmax(score, dim=1)
-                else:
-                    score = torch.sigmoid(score)
-
-                AUC, AUPR, AUPR_norm = Evaluation(y_pred=score, y_true=test_data[:, -1],flag=self.args.flag)
-
-                if AUC > max_AUC:
-                    accumulate_patience = 0
-                    max_AUC = AUC
-                    AUC_AUPR = AUPR
-                    # AUC_epoch = epoch
-                    self.args.ckpt_name = os.path.join(self.args.ckpt_dir, f"model_seed{self.args.random_seed}.pt")
-                    torch.save(
-                        self.model.state_dict(),
-                        self.args.ckpt_name,
-                    )
-                     
-                    save_args(self.args, self.args.ckpt_dir)
-                else:
-                    accumulate_patience += 1
-                    if accumulate_patience >= 10:
-                        break
-
-        logger.info(f"best_auroc: {max_AUC:.4f}, auprc: {AUC_AUPR:.4f}")
-        return max_AUC, AUC_AUPR
     
+    
+    def infer(self):
+        train_load, train_data, test_data, adj, data_feature1, data_feature2 = self._prepare_data()
+        self.model = self.get_model()
+        model_path = os.path.join(self.args.output_dir, f"ckpt/model_seed{self.args.random_seed}.pt")
+        self.model.load_state_dict(torch.load(model_path)) 
+        self.model.eval()
+
+        results_train = []
+        results_test = []
+        for _ in tqdm(range(50)):
+            score_test = self.model(data_feature2, adj, test_data, data_feature1)
+            score_train = self.model(data_feature2, adj, train_data, data_feature1)
+
+            if self.args.flag:
+                score_train = torch.softmax(score_train, dim=1)
+                score_test = torch.softmax(score_test, dim=1)
+            else:
+                score_train = torch.sigmoid(score_train)
+                score_test = torch.softmax(score_test, dim=1)
+        
+            metrics_train = Evaluation(y_pred=score_train, y_true=train_data[:, -1],flag=self.args.flag)
+            metrics_test = Evaluation(y_pred=score_test, y_true=test_data[:, -1],flag=self.args.flag)
+
+            results_train.append(metrics_train)
+            results_test.append(metrics_test)
+
+        return results_train, results_test
 
 def main():
     set_logging()
     args = parse_args()
-    logger.critical(
-        f"Training on {args.dataset} with {args.noise} noise, {args.llm_type} as scFM backbone and {args.gnn_type} as GNN backbone"
-    )
     logger.info(args)
 
     args.random_seed = args.start_seed
     set_seed(random_seed=args.random_seed)
 
-    trainer = Trainer(args)
-    AUROC, AUPRC = trainer.train()
-    logger.info(AUROC, AUPRC)
+    args.gnn_lr = 0.0003362171651078414
+    args.gnn_weight_decay = 1.3352649486036125e-05
+    args.gnn_dropout = 0.6138338762768143
+    args.gnn_num_layers = 1
+    args.mlp_num_layers = 1
+    args.batch_size = 73
+    args.gnn_hidden_dims = [68]  
+    args.mlp_hidden_dims = [42] 
+    args.optimizer_name = 'Adam'
 
-    del trainer
+    args.dataset = 'tf_1000_mHSCL'
+    args.model_type = 'GCN'
+    args.llm_type = 'geneformer'
+    args.cell_type = 'mHSC-L'
+    args.cell_t = 'mHSCL'
+    args.num_TF = '1000'
+    args.species = 'mouse'
+    args.suffix = 'optuna'
+    args.single_gpu = 1
+
+    args.output_dir = f"../out/{args.dataset}/{args.model_type}/{args.suffix}"
+    args.ckpt_dir = f"{args.output_dir}/ckpt"
+    best_output_dir = os.path.join(args.output_dir, "best")
+    
+    save_args(args, best_output_dir)
+    infer = Infer(args)
+    results_train, results_test = infer.infer()
+
+    del infer
     torch.cuda.empty_cache()
     gc.collect()
-    return AUROC, AUPRC
+    return results_train, results_test, best_output_dir
 
 
 if __name__ == "__main__":
-    AUROC, AUPRC = main()
-    print(AUROC, AUPRC)
+    results_train, results_test, best_dir = main()
+    store_results(results_train, best_dir, 'train')
+    store_results(results_test, best_dir, 'test')

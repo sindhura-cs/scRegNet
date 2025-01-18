@@ -19,8 +19,8 @@ def parse_args():
     parser.add_argument("--deepspeed", type=str, default=None)
 
     # parameters for data and model storage
-    parser.add_argument("--data_folder", type=str, default="./data")
-    parser.add_argument("--scFM_folder", type=str, default="./scFM")
+    parser.add_argument("--data_folder", type=str, default="../data")
+    parser.add_argument("--scFM_folder", type=str, default="../scFM")
     parser.add_argument("--task_type", type=str, default="link_pred")
     parser.add_argument("--output_dir", type=str)  # output dir
     parser.add_argument("--ckpt_dir", type=str)  # ckpt path to save
@@ -136,7 +136,7 @@ def save_args(args, dir):
 
 
 def load_args(dir):
-    with open(os.path.join(dir, "args.txt"), "r") as f:
+    with open(os.path.join(dir, "args.json"), "r") as f:
         args = argparse.Namespace(**json.load(f))
     return args
 

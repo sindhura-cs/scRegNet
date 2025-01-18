@@ -31,7 +31,7 @@ venv
 out/
 data/
 wandb/
-infer*
+inference_v0.py
 run_experiments.sh
 optuna.db
 scFM/
