@@ -12,5 +12,4 @@ bash optuna.sh --gnn_type $gnn_type --dataset $dataset  --llm_type $scFM_type \
     --n_trials 50 \
     --cell_type $cell_type \
     --num_TF $num_TF \
-    --single_gpu 7
-
+    --single_gpu 2

@@ -53,13 +53,14 @@ class Trainer:
             SEQ_LEN = gene_num + 1
             scFM_embs = os.path.join(self.args.scFM_folder, "scBERT")
             cell_embeddings_arr = np.load(os.path.join(scFM_embs, f'{self.args.cell_type}_{self.args.num_TF}_cell_embeddings.npy'))
-            attn_scores_arr = np.load(os.path.join(scFM_embs, f'{self.args.cell_type}_{self.args.num_TF}_attention_maps.npy'))
-            attn_scores_genes = attn_scores_arr.mean(1)
-            attn_scores_norm = attn_scores_genes / np.sum(attn_scores_genes, axis=1, keepdims=True)
+            # attn_scores_arr = np.load(os.path.join(scFM_embs, f'{self.args.cell_type}_{self.args.num_TF}_attention_maps.npy'))
+            # attn_scores_genes = attn_scores_arr.mean(1)
+            # attn_scores_norm = attn_scores_genes / np.sum(attn_scores_genes, axis=1, keepdims=True)
 
-            num_cells = cell_embeddings_arr.shape[0]
-            cell_embeddings_reshaped = cell_embeddings_arr.reshape(num_cells, SEQ_LEN, 1, 200)
-            gene_embeddings = np.sum(cell_embeddings_reshaped * attn_scores_norm[:, :, None, None], axis=0).mean(1)
+            # num_cells = cell_embeddings_arr.shape[0]
+            # cell_embeddings_reshaped = cell_embeddings_arr.reshape(num_cells, SEQ_LEN, 1, 200)
+            # gene_embeddings = np.sum(cell_embeddings_reshaped * attn_scores_norm[:, :, None, None], axis=0).mean(1)
+            gene_embeddings = np.mean(cell_embeddings_arr, axis=0)
             
         elif self.args.llm_type == "scFoundation":
             scFM_embs = os.path.join(self.args.scFM_folder, "scFoundation")
@@ -114,6 +115,10 @@ class Trainer:
         self.gene_dim = feature1.size()[1]
 
         data_feature2 = feature2.to(self.device)
+        
+        if self.args.llm_type == "scBERT":
+            feature1 = feature1[:-1]
+        
         data_feature1 = feature1.to(self.device)
         train_load = scRNADataset(train_data, gene_num, flag=self.args.flag)
         adj = train_load.Adj_Generate(tf, loop=self.args.loop)

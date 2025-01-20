@@ -4,16 +4,10 @@ import pandas as pd
 from tqdm import tqdm
 from models import scTransNet_GCN, scTransNet_SAGE, scTransNet_GAT
 from utils import scRNADataset, load_data, adj2saprse_tensor
-import torch.optim as optim
-from torch.utils.data import DataLoader
 from sklearn.metrics import roc_auc_score, average_precision_score, accuracy_score
 from sklearn.metrics import precision_score, recall_score, f1_score
-from torch.nn import functional as F
 import logging
-import gc
 import os
-from args import parse_args, save_args
-from utils import set_logging, store_results, set_seed
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -89,14 +83,15 @@ class Infer:
             SEQ_LEN = gene_num + 1
             scFM_embs = os.path.join(self.args.scFM_folder, "scBERT")
             cell_embeddings_arr = np.load(os.path.join(scFM_embs, f'{self.args.cell_type}_{self.args.num_TF}_cell_embeddings.npy'))
-            attn_scores_arr = np.load(os.path.join(scFM_embs, f'{self.args.cell_type}_{self.args.num_TF}_attention_maps.npy'))
-            attn_scores_genes = attn_scores_arr.mean(1)
-            attn_scores_norm = attn_scores_genes / np.sum(attn_scores_genes, axis=1, keepdims=True)
+            # attn_scores_arr = np.load(os.path.join(scFM_embs, f'{self.args.cell_type}_{self.args.num_TF}_attention_maps.npy'))
+            # attn_scores_genes = attn_scores_arr.mean(1)
+            # attn_scores_norm = attn_scores_genes / np.sum(attn_scores_genes, axis=1, keepdims=True)
 
-            num_cells = cell_embeddings_arr.shape[0]
-            cell_embeddings_reshaped = cell_embeddings_arr.reshape(num_cells, SEQ_LEN, 1, 200)
-            gene_embeddings = np.sum(cell_embeddings_reshaped * attn_scores_norm[:, :, None, None], axis=0).mean(1)
-            
+            # num_cells = cell_embeddings_arr.shape[0]
+            # cell_embeddings_reshaped = cell_embeddings_arr.reshape(num_cells, SEQ_LEN, 1, 200)
+            # gene_embeddings = np.sum(cell_embeddings_reshaped * attn_scores_norm[:, :, None, None], axis=0).mean(1)
+            gene_embeddings = np.mean(cell_embeddings_arr, axis=0)
+
         elif self.args.llm_type == "scFoundation":
             scFM_embs = os.path.join(self.args.scFM_folder, "scFoundation")
             gene_list_df = pd.read_csv(os.path.join(scFM_embs, 'OS_scRNA_gene_index.19264.tsv'), header=0, delimiter='\t')
@@ -150,6 +145,9 @@ class Infer:
         self.gene_dim = feature1.size()[1]
 
         data_feature2 = feature2.to(self.device)
+        if self.args.llm_type == "scBERT":
+            feature1 = feature1[:-1]
+        
         data_feature1 = feature1.to(self.device)
         train_load = scRNADataset(train_data, gene_num, flag=self.args.flag)
         adj = train_load.Adj_Generate(tf, loop=self.args.loop)
@@ -160,7 +158,7 @@ class Infer:
         test_data = torch.from_numpy(test_data)
         test_data = test_data.to(self.device)
 
-        return train_load, train_data, test_data, adj, data_feature1, data_feature2
+        return train_data, test_data, adj, data_feature1, data_feature2
     
     def get_model(self):
 
@@ -186,9 +184,9 @@ class Infer:
     
     
     def infer(self):
-        train_load, train_data, test_data, adj, data_feature1, data_feature2 = self._prepare_data()
+        train_data, test_data, adj, data_feature1, data_feature2 = self._prepare_data()
         self.model = self.get_model()
-        model_path = os.path.join(self.args.output_dir, f"ckpt/model_seed{self.args.random_seed}.pt")
+        model_path = os.path.join(self.args.output_dir, f"best/ckpt/model_seed{self.args.random_seed}.pt")
         self.model.load_state_dict(torch.load(model_path)) 
         self.model.eval()
 
@@ -212,50 +210,3 @@ class Infer:
             results_test.append(metrics_test)
 
         return results_train, results_test
-
-def main():
-    set_logging()
-    args = parse_args()
-    logger.info(args)
-
-    args.random_seed = args.start_seed
-    set_seed(random_seed=args.random_seed)
-
-    args.gnn_lr = 0.0003362171651078414
-    args.gnn_weight_decay = 1.3352649486036125e-05
-    args.gnn_dropout = 0.6138338762768143
-    args.gnn_num_layers = 1
-    args.mlp_num_layers = 1
-    args.batch_size = 73
-    args.gnn_hidden_dims = [68]  
-    args.mlp_hidden_dims = [42] 
-    args.optimizer_name = 'Adam'
-
-    args.dataset = 'tf_1000_mHSCL'
-    args.model_type = 'GCN'
-    args.llm_type = 'geneformer'
-    args.cell_type = 'mHSC-L'
-    args.cell_t = 'mHSCL'
-    args.num_TF = '1000'
-    args.species = 'mouse'
-    args.suffix = 'optuna'
-    args.single_gpu = 1
-
-    args.output_dir = f"../out/{args.dataset}/{args.model_type}/{args.suffix}"
-    args.ckpt_dir = f"{args.output_dir}/ckpt"
-    best_output_dir = os.path.join(args.output_dir, "best")
-    
-    save_args(args, best_output_dir)
-    infer = Infer(args)
-    results_train, results_test = infer.infer()
-
-    del infer
-    torch.cuda.empty_cache()
-    gc.collect()
-    return results_train, results_test, best_output_dir
-
-
-if __name__ == "__main__":
-    results_train, results_test, best_dir = main()
-    store_results(results_train, best_dir, 'train')
-    store_results(results_test, best_dir, 'test')
