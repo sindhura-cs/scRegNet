@@ -2,9 +2,11 @@
 
 We provide PyTorch implementation for scRegNet that combines single-cell foundation models and graph-based learning to predict gene regulatory connections.
 
-<p align="center">
+<!-- <p align="center">
   <img src="./figs/Overview.pdf" width="1000" title="scRegNet framework overview" alt="">
-</p>
+</p> -->
+
+[scRegNet framework overview](./figs/Overview.pdf)
 
 ## Links
 
