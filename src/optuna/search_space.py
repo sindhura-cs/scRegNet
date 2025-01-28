@@ -39,7 +39,6 @@ class GAT_HP_search(Single_HP_search):
         args.gnn_lr = trial.suggest_float("gnn_lr", 1e-5, 1e-2, log=True)
         args.gnn_weight_decay = trial.suggest_float("gnn_weight_decay", 1e-7, 1e-4, log=True)
         args.dropout = trial.suggest_float("gnn_dropout", 0.1, 0.8)
-        # args.gnn_num_layers = trial.suggest_int("gnn_num_layers", 1, 4) # for mDC
         args.gnn_num_layers = trial.suggest_int("gnn_num_layers", 1, 6)
         args.mlp_num_layers = trial.suggest_int("mlp_num_layers", 1, 6)
         args.batch_size = trial.suggest_int("batch_size", 32, 256)

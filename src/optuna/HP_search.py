@@ -5,8 +5,6 @@ import shutil
 import warnings
 from abc import ABC, abstractmethod
 from functools import partial
-import random
-import numpy as np
 
 import optuna
 import torch

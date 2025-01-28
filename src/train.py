@@ -11,7 +11,7 @@ from tqdm import tqdm
 from src.models import scTransNet_GCN, scTransNet_SAGE, scTransNet_GAT
 from src.utils import scRNADataset, load_data, adj2saprse_tensor, Evaluation
 from src.utils import set_logging, set_seed
-from src.args import parse_args, save_args
+from src.args import save_args, parse_args
 import warnings
 
 from optuna.exceptions import ExperimentalWarning
@@ -50,16 +50,8 @@ class Trainer:
             gene_embeddings = np.array(gene_embeddings)
 
         elif self.args.llm_type == "scBERT":
-            SEQ_LEN = gene_num + 1
             scFM_embs = os.path.join(self.args.scFM_folder, "scBERT")
             cell_embeddings_arr = np.load(os.path.join(scFM_embs, f'{self.args.cell_type}_{self.args.num_TF}_cell_embeddings.npy'))
-            # attn_scores_arr = np.load(os.path.join(scFM_embs, f'{self.args.cell_type}_{self.args.num_TF}_attention_maps.npy'))
-            # attn_scores_genes = attn_scores_arr.mean(1)
-            # attn_scores_norm = attn_scores_genes / np.sum(attn_scores_genes, axis=1, keepdims=True)
-
-            # num_cells = cell_embeddings_arr.shape[0]
-            # cell_embeddings_reshaped = cell_embeddings_arr.reshape(num_cells, SEQ_LEN, 1, 200)
-            # gene_embeddings = np.sum(cell_embeddings_reshaped * attn_scores_norm[:, :, None, None], axis=0).mean(1)
             gene_embeddings = np.mean(cell_embeddings_arr, axis=0)
             
         elif self.args.llm_type == "scFoundation":
@@ -100,11 +92,6 @@ class Trainer:
         tf = torch.from_numpy(tf).to(self.device)
         target = pd.read_csv(target_file,index_col=0)['index'].values.astype(np.int64)
         target = torch.from_numpy(target).to(self.device)
-
-        # add noise
-        for i in range(len(train_data)):
-            if np.random.rand() < self.args.noise:
-                train_data[i][2] = 1 - train_data[i][2]
 
         loader = load_data(data_input)
         feature2 = loader.exp_data()
@@ -194,13 +181,12 @@ class Trainer:
                 else:
                     score = torch.sigmoid(score)
 
-                AUC, AUPR, AUPR_norm = Evaluation(y_pred=score, y_true=test_data[:, -1],flag=self.args.flag)
+                AUC, AUPR, _ = Evaluation(y_pred=score, y_true=test_data[:, -1],flag=self.args.flag)
 
                 if AUC > max_AUC:
                     accumulate_patience = 0
                     max_AUC = AUC
                     AUC_AUPR = AUPR
-                    # AUC_epoch = epoch
                     self.args.ckpt_name = os.path.join(self.args.ckpt_dir, f"model_seed{self.args.random_seed}.pt")
                     torch.save(
                         self.model.state_dict(),
@@ -219,13 +205,12 @@ class Trainer:
 
 def main():
     set_logging()
+    
     args = parse_args()
     logger.critical(
-        f"Training on {args.dataset} with {args.noise} noise, {args.llm_type} as scFM backbone and {args.gnn_type} as GNN backbone"
+        f"Training on {args.dataset}, with {args.llm_type} as scFM backbone and {args.gnn_type} as GNN backbone"
     )
     logger.info(args)
-
-    args.random_seed = args.start_seed
     set_seed(random_seed=args.random_seed)
 
     trainer = Trainer(args)
