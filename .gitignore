@@ -31,3 +31,4 @@ venv
 wandb/
 *.npy
 *.csv
+optuna.db

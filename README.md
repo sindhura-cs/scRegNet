@@ -54,7 +54,7 @@ $ python src/inference.py
 
 ### Train
 ```bash
-$ bash gnn_hp.sh tf_500_hESC GCN hESC 500 Geneformer
+$ bash gnn_hp.sh tf_500_mDC GCN mDC 500 Geneformer
 ```
 
 ## Acknowledgements
@@ -66,3 +66,19 @@ We sincerely thank the authors of following open-source projects:
 - [scBERT](https://github.com/TencentAILabHealthcare/scBERT)
 - [Optuna](https://github.com/optuna/optuna)
 - [BEELINE](https://github.com/Murali-group/Beeline)
+
+## Citation
+If you find this repository useful, please cite the following paper:
+```
+@article {Kommu2024.12.16.628715,
+	author = {Kommu, Sindhura and Wang, Yizhi and Wang, Yue and Wang, Xuan},
+	title = {Prediction of Gene Regulatory Connections with Joint Single-Cell Foundation Models and Graph-Based Learning},
+	elocation-id = {2024.12.16.628715},
+	year = {2025},
+	doi = {10.1101/2024.12.16.628715},
+	publisher = {Cold Spring Harbor Laboratory},
+	URL = {https://www.biorxiv.org/content/early/2025/01/29/2024.12.16.628715},
+	eprint = {https://www.biorxiv.org/content/early/2025/01/29/2024.12.16.628715.full.pdf},
+	journal = {bioRxiv}
+}
+```
