@@ -52,7 +52,7 @@ $ cd scRegNet
 $ python src/inference.py
 ```
 
-## Train
+### Train
 ```bash
 $ bash gnn_hp.sh tf_500_hESC GCN hESC 500 Geneformer
 ```
