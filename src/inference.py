@@ -168,7 +168,7 @@ class Infer:
     def infer(self):
         train_data, test_data, adj, data_feature1, data_feature2 = self._prepare_data()
         self.model = self.get_model()
-        model_path = os.path.join(self.args.output_dir, f"best/ckpt/model_seed{self.args.random_seed}.pt")
+        model_path = os.path.join(self.args.output_dir, f"best/ckpt/model.pt")
         self.model.load_state_dict(torch.load(model_path)) 
         self.model.eval()
 
@@ -209,7 +209,12 @@ def main(best_dir):
     return results_train, results_test
 
 if __name__ == "__main__":
-    best_dir = './out/GCN/Geneformer/tf_1000_mHSC-L/without_scFM/best/'
-    results_train, results_test = main(best_dir)
-    store_results(results_train, best_dir, 'train')
-    store_results(results_test, best_dir, 'test')
+    best_dir = './out/GCN/Geneformer/tf_500_hESC/best/'
+    _, results_test = main(best_dir)
+
+    metric_keys = results_test[0].keys()
+    metrics = {key: np.array([result[key] for result in results_test]) for key in metric_keys}
+    mean_metrics = {key: np.mean(metrics[key]) for key in metric_keys}
+    std_metrics = {key: np.std(metrics[key]) for key in metric_keys}
+
+    print(mean_metrics)

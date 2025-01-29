@@ -24,7 +24,7 @@ def parse_args():
     parser.add_argument("--output_dir", type=str)  # output dir
     parser.add_argument("--ckpt_dir", type=str)  # ckpt path to save
     parser.add_argument(
-        "--ckpt_name", type=str, default="model_ckpt.pt"
+        "--ckpt_name", type=str, default="model.pt"
     )  # ckpt name to be loaded
    
 

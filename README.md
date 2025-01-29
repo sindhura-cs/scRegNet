@@ -6,15 +6,6 @@ We provide PyTorch implementation for scRegNet that combines single-cell foundat
   <img src="./figs/Overview.jpg" width="1000" title="scRegNet framework overview" alt="">
 </p>
 
-## Links
-
-- [Installation](#installation)
-- [Data](#data)
-- [Download pretrained weights](#download-pretrained-weights)
-- [Train](#train)
-- [Inference](#inference)
-- [Acknowledgment](#acknowledgment)
-
 ## Installation
 
 For training, a GPU is strongly recommended.
@@ -37,20 +28,32 @@ pip install wandb
 ```
 **Note: PyTorch 2.4.1 and CUDA 12.4 were used during development.**
 
-## Data
+## Desription
 
-We use seven publicly available scRNA-seq benchmark datasets by BEELINE (Pratapa et al., 2020) for gene regulatory link prediction from single-cell transcriptomic data.
+We use seven publicly available scRNA-seq benchmark datasets by BEELINE (Pratapa et al., 2020) for gene regulatory link prediction from single-cell transcriptomic data. We use the same data split in paper [GENELink](https://github.com/zpliulab/GENELink/tree/main) for a fair comparision. The repository is organised as follows:
 
-## Download pretrained weights
+* data/: contains the benchmark datasets for running demo experiments
+* out/: contains our trained model weights for scRegNet(w/ Geneformer) using GCN as the GNN backbone.
+* src/: contains our source code for scRegNet.
+  * inference.py: evaluation code for gene regulatory link prediction.
+  * models.py: contains our model scRegNet.  
+  * utils.py: contains tool functions for preprocessing data, and metrics for evaluation, etc.
+  * train.py: code for training a new model.
+  * optuna/: sub-directory of codes for hyperparameter tuning using optuna
+* scFM/: contains the gene level features extracted from single-cell foundation models. You can download the Geneformer embeddings for demo experiments from [here](https://drive.google.com/drive/folders/1xnh4ixJwx1kzmO98FmGUvy5S7uqLW-yR?usp=sharing)
 
-## Train
 
-## Inference
+## Running experiments
 
-## Usage
+### Demo
 ```bash
 $ git clone this-repo-url
 $ cd scRegNet
+$ python src/inference.py
+```
+
+## Train
+```bash
 $ bash gnn_hp.sh tf_500_hESC GCN hESC 500 Geneformer
 ```
 
